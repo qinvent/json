@@ -128,22 +128,20 @@ public class GeneratorState extends RubyObject {
         return fromState(context, RuntimeInfo.forRuntime(context.getRuntime()), opts);
     }
 
-    static GeneratorState fromState(ThreadContext context, RuntimeInfo info,
-                                    IRubyObject opts) {
+    static GeneratorState fromState(ThreadContext context, RuntimeInfo info, IRubyObject opts) {
         RubyClass klass = info.generatorStateClass.get();
         if (opts != null) {
             // if the given parameter is a Generator::State, return itself
-            if (klass.isInstance(opts)) return (GeneratorState)opts;
+            if (klass.isInstance(opts)) return (GeneratorState) opts;
 
             // if the given parameter is a Hash, pass it to the instantiator
-            if (context.getRuntime().getHash().isInstance(opts)) {
-                return (GeneratorState)klass.newInstance(context,
-                        new IRubyObject[] {opts}, Block.NULL_BLOCK);
+            if (opts instanceof RubyHash) {
+                return (GeneratorState) klass.newInstance(context, new IRubyObject[] {opts}, Block.NULL_BLOCK);
             }
         }
 
         // for other values, return the safe prototype
-        return (GeneratorState)info.getSafeStatePrototype(context).dup();
+        return (GeneratorState) info.getSafeStatePrototype(context).dup();
     }
 
     /**
