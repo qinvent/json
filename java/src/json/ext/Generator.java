@@ -16,6 +16,7 @@ import org.jruby.RubyFloat;
 import org.jruby.RubyHash;
 import org.jruby.RubyNumeric;
 import org.jruby.RubyString;
+import org.jruby.RubySymbol;
 import org.jruby.runtime.ClassIndex;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
@@ -67,6 +68,7 @@ public final class Generator {
     private static final int NIL = 5;
     private static final int TRUE = 6;
     private static final int FALSE = 7;
+    private static final int SYMBOL = 8;
     private static final int HASH = 10;
     private static final int FLOAT = 11;
     // hard-coded due JRuby 1.7 compatibility
@@ -88,6 +90,7 @@ public final class Generator {
             case FLOAT  : return (Handler) FLOAT_HANDLER;
             case FIXNUM : return (Handler) FIXNUM_HANDLER;
             case BIGNUM : return (Handler) BIGNUM_HANDLER;
+            case SYMBOL : return (Handler) SYMBOL_HANDLER;
             case STRING :
                 if (((RubyBasicObject) object).getMetaClass() != runtime.getString()) break;
                 return (Handler) STRING_HANDLER;
@@ -116,7 +119,7 @@ public final class Generator {
      * won't be part of the session.
      */
     static class Session {
-        private final ThreadContext context;
+        final ThreadContext context;
         private GeneratorState state;
         private IRubyObject possibleState;
         private RuntimeInfo info;
@@ -132,16 +135,8 @@ public final class Generator {
 
         Session(ThreadContext context, IRubyObject possibleState) {
             this.context = context;
-            this.possibleState = possibleState == null || possibleState.isNil()
+            this.possibleState = possibleState == null || possibleState == context.nil
                     ? null : possibleState;
-        }
-
-        public ThreadContext getContext() {
-            return context;
-        }
-
-        public Ruby getRuntime() {
-            return context.getRuntime();
         }
 
         public GeneratorState getState() {
@@ -152,7 +147,7 @@ public final class Generator {
         }
 
         public RuntimeInfo getInfo() {
-            if (info == null) info = RuntimeInfo.forRuntime(getRuntime());
+            if (info == null) info = RuntimeInfo.forRuntime(context.runtime);
             return info;
         }
 
@@ -192,8 +187,8 @@ public final class Generator {
             RubyString result;
             ByteList buffer = new ByteList(guessSize(session, object));
             generate(session, object, buffer);
-            result = RubyString.newString(session.getRuntime(), buffer);
-            ThreadContext context = session.getContext();
+            ThreadContext context = session.context;
+            result = RubyString.newString(context.runtime, buffer);
             RuntimeInfo info = session.getInfo();
             result.force_encoding(context, info.utf8.get());
             return result;
@@ -220,7 +215,7 @@ public final class Generator {
 
         @Override
         RubyString generateNew(Session session, T object) {
-            return RubyString.newStringShared(session.getRuntime(), keyword);
+            return RubyString.newStringShared(session.context.runtime, keyword);
         }
 
         @Override
@@ -259,7 +254,7 @@ public final class Generator {
 
                 if (Double.isInfinite(value) || Double.isNaN(value)) {
                     if (!session.getState().allowNaN()) {
-                        throw Utils.newException(session.getContext(),
+                        throw Utils.newException(session.context,
                                 Utils.M_GENERATOR_ERROR,
                                 object + " not allowed in JSON");
                     }
@@ -283,8 +278,8 @@ public final class Generator {
 
             @Override
             void generate(Session session, RubyArray object, ByteList buffer) {
-                ThreadContext context = session.getContext();
-                Ruby runtime = context.getRuntime();
+                ThreadContext context = session.context;
+                Ruby runtime = context.runtime;
                 GeneratorState state = session.getState();
                 int depth = state.increaseDepth();
 
@@ -341,8 +336,8 @@ public final class Generator {
             @Override
             void generate(final Session session, RubyHash object,
                           final ByteList buffer) {
-                ThreadContext context = session.getContext();
-                final Ruby runtime = context.getRuntime();
+                ThreadContext context = session.context;
+                final Ruby runtime = context.runtime;
                 final GeneratorState state = session.getState();
                 final int depth = state.increaseDepth();
 
@@ -399,12 +394,12 @@ public final class Generator {
 
             @Override
             void generate(Session session, RubyString object, ByteList buffer) {
+                ThreadContext context = session.context;
                 RuntimeInfo info = session.getInfo();
                 RubyString src;
 
-                if (object.encoding(session.getContext()) != info.utf8.get()) {
-                    src = (RubyString)object.encode(session.getContext(),
-                                                    info.utf8.get());
+                if (object.encoding(context) != info.utf8.get()) {
+                    src = (RubyString) object.encode(context, info.utf8.get());
                 } else {
                     src = object;
                 }
@@ -413,12 +408,31 @@ public final class Generator {
             }
         };
 
-    static final Handler<RubyBoolean> TRUE_HANDLER =
-        new KeywordHandler<RubyBoolean>("true");
-    static final Handler<RubyBoolean> FALSE_HANDLER =
-        new KeywordHandler<RubyBoolean>("false");
-    static final Handler<IRubyObject> NIL_HANDLER =
-        new KeywordHandler<IRubyObject>("null");
+    static final Handler<RubySymbol> SYMBOL_HANDLER =
+        new Handler<RubySymbol>() {
+            @Override
+            int guessSize(Session session, RubySymbol object) {
+                return object.asJavaString().length() + 2; // + the quotes
+            }
+
+            @Override
+            void generate(Session session, RubySymbol object, ByteList buffer) {
+                ThreadContext context = session.context;
+                RuntimeInfo info = session.getInfo();
+
+                RubyString src = (RubyString) object.to_s(context);
+
+                if (object.encoding(context) != info.utf8.get()) {
+                    src = (RubyString) src.encode(context, info.utf8.get());
+                }
+
+                session.getStringEncoder().encode(src.getByteList(), buffer);
+            }
+        };
+
+    static final Handler<RubyBoolean> TRUE_HANDLER = new KeywordHandler<RubyBoolean>("true");
+    static final Handler<RubyBoolean> FALSE_HANDLER = new KeywordHandler<RubyBoolean>("false");
+    static final Handler<IRubyObject> NIL_HANDLER = new KeywordHandler<IRubyObject>("null");
 
     /**
      * The default handler (<code>Object#to_json</code>): coerces the object
@@ -447,11 +461,12 @@ public final class Generator {
         new Handler<IRubyObject>() {
             @Override
             RubyString generateNew(Session session, IRubyObject object) {
+                ThreadContext context = session.context;
                 if (object.respondsTo("to_json")) {
-                    IRubyObject result = object.callMethod(session.getContext(), "to_json",
+                    IRubyObject result = object.callMethod(context, "to_json",
                               new IRubyObject[] {session.getState()});
-                    if (result instanceof RubyString) return (RubyString)result;
-                    throw session.getRuntime().newTypeError("to_json must return a String");
+                    if (result instanceof RubyString) return (RubyString) result;
+                    throw context.runtime.newTypeError("to_json must return a String");
                 } else {
                     return OBJECT_HANDLER.generateNew(session, object);
                 }
