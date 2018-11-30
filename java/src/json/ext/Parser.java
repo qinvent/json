@@ -154,7 +154,7 @@ public class Parser extends RubyObject {
 
     @JRubyMethod(required = 1, optional = 1, visibility = Visibility.PRIVATE)
     public IRubyObject initialize(ThreadContext context, IRubyObject[] args) {
-        Ruby runtime = context.getRuntime();
+        Ruby runtime = context.runtime;
         if (this.vSource != null) {
             throw runtime.newTypeError("already initialized instance");
          }
@@ -168,16 +168,15 @@ public class Parser extends RubyObject {
         this.objectClass     = opts.getClass("object_class", runtime.getHash());
         this.arrayClass      = opts.getClass("array_class", runtime.getArray());
         this.decimalClass    = opts.getClass("decimal_class", null);
-        this.matchString    = opts.getHash("match_string");
+        this.matchString     = opts.getHash("match_string");
 
-        if(symbolizeNames && createAdditions) {
-          throw runtime.newArgumentError(
-            "options :symbolize_names and :create_additions cannot be " +
-            " used in conjunction"
-          );
+        if (symbolizeNames && createAdditions) {
+            throw runtime.newArgumentError(
+                "options :symbolize_names and :create_additions cannot be " +
+                " used in conjunction"
+            );
         }
-        this.vSource = args[0].convertToString();
-        this.vSource = convertEncoding(context, vSource);
+        this.vSource = convertEncoding(context, args[0].convertToString());
 
         return this;
     }
@@ -224,11 +223,8 @@ public class Parser extends RubyObject {
     }
 
     public RubyString checkAndGetSource() {
-      if (vSource != null) {
-        return vSource;
-      } else {
+        if (vSource != null) return vSource;
         throw getRuntime().newTypeError("uninitialized instance");
-      }
     }
 
     /**
@@ -898,15 +894,8 @@ case 5:
         }
 
         RubyInteger createInteger(int p, int new_p) {
-            Ruby runtime = getRuntime();
             ByteList num = absSubSequence(p, new_p);
-            return bytesToInum(runtime, num);
-        }
-
-        RubyInteger bytesToInum(Ruby runtime, ByteList num) {
-            return runtime.is1_9() ?
-                    ConvertBytes.byteListToInum19(runtime, num, 10, true) :
-                    ConvertBytes.byteListToInum(runtime, num, 10, true);
+            return ConvertBytes.byteListToInum19(context.runtime, num, 10, true);
         }
 
         
@@ -1157,16 +1146,13 @@ case 5:
         }
 
         RubyFloat createFloat(int p, int new_p) {
-            Ruby runtime = getRuntime();
             ByteList num = absSubSequence(p, new_p);
-            return RubyFloat.newFloat(runtime, dc.parse(num, true, runtime.is1_9()));
+            return RubyFloat.newFloat(context.runtime, dc.parse(num, true, true));
         }
 
         IRubyObject createCustomDecimal(int p, int new_p) {
-            Ruby runtime = getRuntime();
             ByteList num = absSubSequence(p, new_p);
-            IRubyObject numString = runtime.newString(num.toString());
-            return parser.decimalClass.callMethod(context, "new", numString);
+            return parser.decimalClass.callMethod(context, "new", context.runtime.newString(num));
         }
 
         
@@ -1573,11 +1559,10 @@ static final int JSON_array_en_main = 1;
             }
 
             IRubyObject result;
-            if (parser.arrayClass == getRuntime().getArray()) {
-                result = RubyArray.newArray(getRuntime());
+            if (parser.arrayClass == context.runtime.getArray()) {
+                result = RubyArray.newArray(context.runtime);
             } else {
-                result = parser.arrayClass.newInstance(context,
-                        IRubyObject.NULL_ARRAY, Block.NULL_BLOCK);
+                result = parser.arrayClass.newInstance(context, Block.NULL_BLOCK);
             }
 
             
@@ -1676,7 +1661,7 @@ case 1:
                     p--;
                     { p += 1; _goto_targ = 5; if (true)  continue _goto;}
                 } else {
-                    if (parser.arrayClass == getRuntime().getArray()) {
+                    if (parser.arrayClass == context.runtime.getArray()) {
                         ((RubyArray)result).append(res.result);
                     } else {
                         result.callMethod(context, "<<", res.result);
@@ -1861,12 +1846,11 @@ static final int JSON_object_en_main = 1;
             // this is guaranteed to be a RubyHash due to the earlier
             // allocator test at OptionsReader#getClass
             IRubyObject result;
-            if (parser.objectClass == getRuntime().getHash()) {
-                result = RubyHash.newHash(getRuntime());
+            if (parser.objectClass == context.runtime.getHash()) {
+                result = RubyHash.newHash(context.runtime);
             } else {
                 objectDefault = false;
-                result = parser.objectClass.newInstance(context,
-                        IRubyObject.NULL_ARRAY, Block.NULL_BLOCK);
+                result = parser.objectClass.newInstance(context, Block.NULL_BLOCK);
             }
 
             
@@ -1965,7 +1949,7 @@ case 1:
                     p--;
                     { p += 1; _goto_targ = 5; if (true)  continue _goto;}
                 } else {
-                    if (parser.objectClass == getRuntime().getHash()) {
+                    if (parser.objectClass == context.runtime.getHash()) {
                         ((RubyHash)result).op_aset(context, lastName, res.result);
                     } else {
                         result.callMethod(context, "[]=", new IRubyObject[] { lastName, res.result });
@@ -1984,9 +1968,7 @@ case 1:
                 } else {
                     RubyString name = (RubyString)res.result;
                     if (parser.symbolizeNames) {
-                        lastName = context.getRuntime().is1_9()
-                                       ? name.intern19()
-                                       : name.intern();
+                        lastName = name.intern19();
                     } else {
                         lastName = name;
                     }
@@ -2328,10 +2310,5 @@ case 5:
             return Utils.newException(context, className, message);
         }
 
-        private RaiseException newException(String className,
-                String messageBegin, ByteList messageEnd) {
-            return newException(className,
-                    getRuntime().newString(messageBegin).cat(messageEnd));
-        }
     }
 }
