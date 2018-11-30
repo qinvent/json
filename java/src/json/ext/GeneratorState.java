@@ -138,7 +138,7 @@ public class GeneratorState extends RubyObject {
 
             // if the given parameter is a Hash, pass it to the instantiator
             if (opts instanceof RubyHash) {
-                return (GeneratorState) klass.newInstance(context, new IRubyObject[] {opts}, Block.NULL_BLOCK);
+                return (GeneratorState) klass.newInstance(context, opts, Block.NULL_BLOCK);
             }
         }
 

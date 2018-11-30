@@ -129,21 +129,13 @@ public final class Generator {
 
         Session(ThreadContext context, IRubyObject possibleState) {
             this.context = context;
-            this.possibleState = possibleState == null || possibleState.isNil()
-                    ? null : possibleState;
-        }
-
-        public ThreadContext getContext() {
-            return context;
-        }
-
-        public Ruby getRuntime() {
-            return context.getRuntime();
+            this.possibleState = possibleState == null || possibleState.isNil() ? null : possibleState;
         }
 
         public GeneratorState getState() {
             if (state == null) {
-                state = GeneratorState.fromState(context, getInfo(), possibleState);
+                RubyClass klass = getInfo().getGeneratorState();
+                state = GeneratorState.fromState(context, getInfo(), klass, possibleState);
             }
             return state;
         }
@@ -215,7 +207,7 @@ public final class Generator {
 
         @Override
         RubyString generateNew(Session session, T object) {
-            return RubyString.newStringShared(session.getRuntime(), keyword);
+            return RubyString.newStringShared(session.context.runtime, keyword);
         }
 
         @Override
@@ -251,9 +243,7 @@ public final class Generator {
 
                 if (Double.isInfinite(value) || Double.isNaN(value)) {
                     if (!session.getState().allowNaN()) {
-                        throw Utils.newException(session.getContext(),
-                                Utils.M_GENERATOR_ERROR,
-                                object + " not allowed in JSON");
+                        throw newException(session.context, M_GENERATOR_ERROR, object + " not allowed in JSON");
                     }
                 }
                 buffer.append(((RubyString) object.to_s()).getByteList()); // US-ASCII
@@ -275,8 +265,9 @@ public final class Generator {
 
             @Override
             void generate(Session session, RubyArray object, ByteList buffer) {
-                ThreadContext context = session.getContext();
-                Ruby runtime = context.getRuntime();
+                final ThreadContext context = session.context;
+                final Ruby runtime = context.runtime;
+
                 GeneratorState state = session.getState();
                 int depth = state.increaseDepth();
 
@@ -331,15 +322,14 @@ public final class Generator {
             }
 
             @Override
-            void generate(final Session session, RubyHash object,
-                          final ByteList buffer) {
-                ThreadContext context = session.getContext();
-                final Ruby runtime = context.getRuntime();
+            void generate(final Session session, RubyHash object, final ByteList buffer) {
+                ThreadContext context = session.context;
+                final Ruby runtime = context.runtime;
                 final GeneratorState state = session.getState();
                 final int depth = state.increaseDepth();
 
                 final ByteList objectNl = state.getObjectNl();
-                final byte[] indent = Utils.repeat(state.getIndent(), depth);
+                final byte[] indent = repeat(state.getIndent(), depth);
                 final ByteList spaceBefore = state.getSpaceBefore();
                 final ByteList space = state.getSpace();
 
@@ -365,15 +355,14 @@ public final class Generator {
                         buffer.append((byte)':');
                         buffer.append(space);
 
-                        Handler<IRubyObject> valueHandler = getHandlerFor(runtime, value);
-                        valueHandler.generate(session, value, buffer);
+                        getHandlerFor(runtime, value).generate(session, value, buffer);
                         session.infectBy(value);
                     }
                 });
                 state.decreaseDepth();
                 if (objectNl.length() != 0) {
                     buffer.append(objectNl);
-                    buffer.append(Utils.repeat(state.getIndent(), state.getDepth()));
+                    buffer.append(repeat(state.getIndent(), state.getDepth()));
                 }
                 buffer.append((byte)'}');
             }
@@ -436,14 +425,13 @@ public final class Generator {
         new Handler<IRubyObject>() {
             @Override
             RubyString generateNew(Session session, IRubyObject object) {
+                ThreadContext context = session.context;
                 if (object.respondsTo("to_json")) {
-                    IRubyObject result = object.callMethod(session.getContext(), "to_json",
-                              new IRubyObject[] {session.getState()});
-                    if (result instanceof RubyString) return (RubyString)result;
-                    throw session.getRuntime().newTypeError("to_json must return a String");
-                } else {
-                    return OBJECT_HANDLER.generateNew(session, object);
+                    IRubyObject result = object.callMethod(context, "to_json", session.getState());
+                    if (result instanceof RubyString) return (RubyString) result;
+                    throw context.runtime.newTypeError("to_json must return a String");
                 }
+                return OBJECT_HANDLER.generateNew(session, object);
             }
 
             @Override
