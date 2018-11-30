@@ -199,12 +199,12 @@ public final class Generator {
     /**
      * A handler that returns a fixed keyword regardless of the passed object.
      */
-    private static class KeywordHandler<T extends IRubyObject>
-            extends Handler<T> {
+    private static class KeywordHandler<T extends IRubyObject> extends Handler<T> {
+
         private final ByteList keyword;
 
         private KeywordHandler(String keyword) {
-            this.keyword = new ByteList(ByteList.plain(keyword), false);
+            this.keyword = new ByteList(ByteList.plain(keyword), UTF8, false);
         }
 
         @Override
