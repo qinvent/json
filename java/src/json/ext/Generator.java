@@ -19,6 +19,7 @@ import org.jruby.RubyString;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.jruby.util.ByteList;
+import org.jruby.util.ConvertBytes;
 
 import static json.ext.Utils.*;
 
@@ -238,7 +239,7 @@ public final class Generator {
         new Handler<RubyFixnum>() {
             @Override
             void generate(Session session, RubyFixnum object, ByteList buffer) {
-                buffer.append(object.to_s().getByteList());
+                buffer.append(ConvertBytes.longToByteList(object.getLongValue(), 10));
             }
         };
 
@@ -255,7 +256,7 @@ public final class Generator {
                                 object + " not allowed in JSON");
                     }
                 }
-                buffer.append(((RubyString)object.to_s()).getByteList());
+                buffer.append(((RubyString) object.to_s()).getByteList()); // US-ASCII
             }
         };
 
