@@ -14,13 +14,12 @@ import org.jruby.RubyEncoding;
 import org.jruby.RubyFloat;
 import org.jruby.RubyHash;
 import org.jruby.RubyInteger;
-import org.jruby.RubyModule;
-import org.jruby.RubyNumeric;
 import org.jruby.RubyObject;
 import org.jruby.RubyString;
 import org.jruby.anno.JRubyMethod;
 import org.jruby.exceptions.JumpException;
 import org.jruby.exceptions.RaiseException;
+import org.jruby.ext.bigdecimal.RubyBigDecimal;
 import org.jruby.runtime.Block;
 import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
@@ -1010,9 +1009,9 @@ static final int JSON_float_en_main = 1;
                 res.update(null, p);
                 return;
             }
-            IRubyObject number = parser.decimalClass == null ?
-                createFloat(p, new_p) : createCustomDecimal(p, new_p);
 
+            final RubyClass decimalClass = parser.decimalClass;
+            IRubyObject number = decimalClass == null ? createFloat(p, new_p) : createDecimal(decimalClass, p, new_p);
             res.update(number, new_p + 1);
             return;
         }
@@ -1150,9 +1149,13 @@ case 5:
             return RubyFloat.newFloat(context.runtime, dc.parse(num, true, true));
         }
 
-        IRubyObject createCustomDecimal(int p, int new_p) {
+        IRubyObject createDecimal(RubyClass klass, int p, int new_p) {
             ByteList num = absSubSequence(p, new_p);
-            return parser.decimalClass.callMethod(context, "new", context.runtime.newString(num));
+            RubyString numStr = context.runtime.newString(num);
+            if ("BigDecimal".equals(klass.getName())) {
+                return RubyBigDecimal.newInstance(context, klass, numStr);
+            }
+            return klass.callMethod(context, "new", numStr);
         }
 
         
