@@ -5,6 +5,11 @@
  */
 package json.ext;
 
+import org.jcodings.Encoding;
+import org.jcodings.specific.ASCIIEncoding;
+import org.jcodings.specific.USASCIIEncoding;
+import org.jcodings.specific.UTF8Encoding;
+
 import org.jruby.Ruby;
 import org.jruby.RubyArray;
 import org.jruby.RubyClass;
@@ -21,6 +26,11 @@ import org.jruby.util.ByteList;
  * Library of miscellaneous utility functions
  */
 final class Utils {
+
+    static final Encoding ASCII_8BIT = ASCIIEncoding.INSTANCE;
+    static final Encoding US_ASCII = USASCIIEncoding.INSTANCE;
+    static final Encoding UTF8 = UTF8Encoding.INSTANCE;
+
     public static final String M_GENERATOR_ERROR = "GeneratorError";
     public static final String M_NESTING_ERROR = "NestingError";
     public static final String M_PARSER_ERROR = "ParserError";

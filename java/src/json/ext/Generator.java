@@ -20,6 +20,8 @@ import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.jruby.util.ByteList;
 
+import static json.ext.Utils.*;
+
 public final class Generator {
     private Generator() {
         throw new RuntimeException();
@@ -183,14 +185,12 @@ public final class Generator {
         }
 
         RubyString generateNew(Session session, T object) {
-            RubyString result;
             ByteList buffer = new ByteList(guessSize(session, object));
             generate(session, object, buffer);
-            result = RubyString.newString(session.getRuntime(), buffer);
-            ThreadContext context = session.getContext();
-            RuntimeInfo info = session.getInfo();
-            result.force_encoding(context, info.utf8.get());
-            return result;
+            ThreadContext context = session.context;
+            RubyString str = RubyString.newString(context.runtime, buffer);
+            str.associateEncoding(UTF8);
+            return str;
         }
 
         abstract void generate(Session session, T object, ByteList buffer);
