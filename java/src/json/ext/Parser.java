@@ -297,7 +297,7 @@ public class Parser extends RubyObject {
             this.byteList = parser.checkAndGetSource().getByteList();
             this.data = byteList.unsafeBytes();
             this.view = new ByteList(data, false);
-            this.decoder = new StringDecoder(context);
+            this.decoder = new StringDecoder(context.runtime);
             this.dc = new DoubleConverter();
         }
 
@@ -309,7 +309,7 @@ public class Parser extends RubyObject {
         }
 
         private Ruby getRuntime() {
-            return context.getRuntime();
+            return context.runtime;
         }
 
         

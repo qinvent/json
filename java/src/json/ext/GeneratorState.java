@@ -21,6 +21,8 @@ import org.jruby.runtime.Visibility;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.jruby.util.ByteList;
 
+import static json.ext.Utils.*;
+
 /**
  * The <code>JSON::Ext::Generator::State</code> class.
  *
@@ -205,19 +207,8 @@ public class GeneratorState extends RubyObject {
     @JRubyMethod
     public IRubyObject generate(ThreadContext context, IRubyObject obj) {
         RubyString result = Generator.generateJson(context, obj, this);
-        RuntimeInfo info = RuntimeInfo.forRuntime(context.getRuntime());
-        result.force_encoding(context, info.utf8.get());
+        result.associateEncoding(UTF8);
         return result;
-    }
-
-    private static boolean matchClosingBrace(ByteList bl, int pos, int len,
-                                             int brace) {
-        for (int endPos = len - 1; endPos > pos; endPos--) {
-            int b = bl.get(endPos);
-            if (Character.isWhitespace(b)) continue;
-            return b == brace;
-        }
-        return false;
     }
 
     @JRubyMethod(name="[]", required=1)
@@ -350,7 +341,7 @@ public class GeneratorState extends RubyObject {
 
     @JRubyMethod(name="allow_nan?")
     public RubyBoolean allow_nan_p(ThreadContext context) {
-        return context.getRuntime().newBoolean(allowNaN);
+        return context.runtime.newBoolean(allowNaN);
     }
 
     public boolean asciiOnly() {
@@ -359,12 +350,12 @@ public class GeneratorState extends RubyObject {
 
     @JRubyMethod(name="ascii_only?")
     public RubyBoolean ascii_only_p(ThreadContext context) {
-        return context.getRuntime().newBoolean(asciiOnly);
+        return context.runtime.newBoolean(asciiOnly);
     }
 
     @JRubyMethod(name="buffer_initial_length")
     public RubyInteger buffer_initial_length_get(ThreadContext context) {
-        return context.getRuntime().newFixnum(bufferInitialLength);
+        return context.runtime.newFixnum(bufferInitialLength);
     }
 
     @JRubyMethod(name="buffer_initial_length=")
@@ -380,7 +371,7 @@ public class GeneratorState extends RubyObject {
 
     @JRubyMethod(name="depth")
     public RubyInteger depth_get(ThreadContext context) {
-        return context.getRuntime().newFixnum(depth);
+        return context.runtime.newFixnum(depth);
     }
 
     @JRubyMethod(name="depth=")
@@ -389,13 +380,8 @@ public class GeneratorState extends RubyObject {
         return vDepth;
     }
 
-    private ByteList prepareByteList(ThreadContext context, IRubyObject value) {
-        RubyString str = value.convertToString();
-        RuntimeInfo info = RuntimeInfo.forRuntime(context.getRuntime());
-        if (str.encoding(context) != info.utf8.get()) {
-            str = (RubyString)str.encode(context, info.utf8.get());
-        }
-        return str.getByteList().dup();
+    private static ByteList prepareByteList(ThreadContext context, IRubyObject value) {
+        return encodeUTF8(context, value.convertToString()).getByteList().dup();
     }
 
     /**

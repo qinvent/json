@@ -112,7 +112,7 @@ public final class Generator {
      * <p>Note that anything called indirectly (via {@link GENERIC_HANDLER})
      * won't be part of the session.
      */
-    static class Session {
+    static final class Session {
         private final ThreadContext context;
         private GeneratorState state;
         private IRubyObject possibleState;
@@ -149,13 +149,13 @@ public final class Generator {
         }
 
         public RuntimeInfo getInfo() {
-            if (info == null) info = RuntimeInfo.forRuntime(getRuntime());
+            if (info == null) info = RuntimeInfo.forRuntime(context.runtime);
             return info;
         }
 
         public StringEncoder getStringEncoder() {
             if (stringEncoder == null) {
-                stringEncoder = new StringEncoder(context, getState().asciiOnly());
+                stringEncoder = new StringEncoder(context.runtime, getState().asciiOnly());
             }
             return stringEncoder;
         }

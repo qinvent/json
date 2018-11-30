@@ -5,9 +5,11 @@
  */
 package json.ext;
 
+import org.jruby.Ruby;
 import org.jruby.exceptions.RaiseException;
-import org.jruby.runtime.ThreadContext;
 import org.jruby.util.ByteList;
+
+import static json.ext.Utils.*;
 
 /**
  * A decoder that reads a JSON-encoded string from the given sources and
@@ -24,8 +26,8 @@ final class StringDecoder extends ByteListTranscoder {
     // Array used for writing multi-byte characters into the buffer at once
     private final byte[] aux = new byte[4];
 
-    StringDecoder(ThreadContext context) {
-        super(context);
+    StringDecoder(Ruby runtime) {
+        super(runtime);
     }
 
     ByteList decode(ByteList src, int start, int end) {
@@ -155,12 +157,9 @@ final class StringDecoder extends ByteListTranscoder {
 
     @Override
     protected RaiseException invalidUtf8() {
-        ByteList message = new ByteList(
-                ByteList.plain("partial character in source, " +
-                               "but hit end near "));
+        ByteList message = new ByteList(ByteList.plain("partial character in source, but hit end near "), false);
         int start = surrogatePairStart != -1 ? surrogatePairStart : charStart;
         message.append(src, start, srcEnd - start);
-        return Utils.newException(context, Utils.M_PARSER_ERROR,
-                                  context.getRuntime().newString(message));
+        return newException(runtime.getCurrentContext(), M_PARSER_ERROR, runtime.newString(message));
     }
 }

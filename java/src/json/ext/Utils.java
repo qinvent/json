@@ -10,12 +10,7 @@ import org.jcodings.specific.ASCIIEncoding;
 import org.jcodings.specific.USASCIIEncoding;
 import org.jcodings.specific.UTF8Encoding;
 
-import org.jruby.Ruby;
-import org.jruby.RubyArray;
-import org.jruby.RubyClass;
-import org.jruby.RubyException;
-import org.jruby.RubyHash;
-import org.jruby.RubyString;
+import org.jruby.*;
 import org.jruby.exceptions.RaiseException;
 import org.jruby.runtime.Block;
 import org.jruby.runtime.ThreadContext;
@@ -66,18 +61,14 @@ final class Utils {
 
     static RaiseException newException(ThreadContext context,
                                        String className, String message) {
-        return newException(context, className,
-                            context.getRuntime().newString(message));
+        return newException(context, className, context.runtime.newString(message));
     }
 
     static RaiseException newException(ThreadContext context,
                                        String className, RubyString message) {
-        RuntimeInfo info = RuntimeInfo.forRuntime(context.getRuntime());
-        RubyClass klazz = info.jsonModule.get().getClass(className);
-        RubyException excptn =
-            (RubyException)klazz.newInstance(context,
-                new IRubyObject[] {message}, Block.NULL_BLOCK);
-        return new RaiseException(excptn);
+        RubyClass klazz = context.runtime.getModule("JSON").getClass(className);
+        RubyException ex = (RubyException) klazz.newInstance(context, message, Block.NULL_BLOCK);
+        return new RaiseException(ex);
     }
 
     static byte[] repeat(ByteList a, int n) {
@@ -93,4 +84,13 @@ final class Utils {
         }
         return result;
     }
+
+    static RubyString encodeUTF8(ThreadContext context, RubyString str) {
+        if (str.getEncoding() != UTF8) {
+            RubyEncoding utf8 = context.runtime.getEncodingService().getEncoding(UTF8);
+            return (RubyString) str.encode(context, utf8);
+        }
+        return str;
+    }
+
 }

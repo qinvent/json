@@ -5,8 +5,8 @@
  */
 package json.ext;
 
+import org.jruby.Ruby;
 import org.jruby.exceptions.RaiseException;
-import org.jruby.runtime.ThreadContext;
 import org.jruby.util.ByteList;
 
 /**
@@ -14,7 +14,8 @@ import org.jruby.util.ByteList;
  * using UTF-8 ByteLists as both input and output.
  */
 abstract class ByteListTranscoder {
-    protected final ThreadContext context;
+
+    final Ruby runtime;
 
     protected ByteList src;
     protected int srcEnd;
@@ -24,6 +25,7 @@ abstract class ByteListTranscoder {
     protected int pos;
 
     private ByteList out;
+
     /**
      * When a character that can be copied straight into the output is found,
      * its index is stored on this variable, and copying is delayed until
@@ -33,8 +35,8 @@ abstract class ByteListTranscoder {
      */
     private int quoteStart = -1;
 
-    protected ByteListTranscoder(ThreadContext context) {
-        this.context = context;
+    ByteListTranscoder(Ruby runtime) {
+        this.runtime = runtime;
     }
 
     protected void init(ByteList src, ByteList out) {
@@ -52,7 +54,7 @@ abstract class ByteListTranscoder {
     /**
      * Returns whether there are any characters left to be read.
      */
-    protected boolean hasNext() {
+    protected final boolean hasNext() {
         return pos < srcEnd;
     }
 
@@ -70,7 +72,7 @@ abstract class ByteListTranscoder {
      * <p>Raises an {@link #invalidUtf8()} exception if an invalid byte
      * is found.
      */
-    protected int readUtf8Char() {
+    protected final int readUtf8Char() {
         charStart = pos;
         char head = next();
         if (head <= 0x7f) { // 0b0xxxxxxx (ASCII)
@@ -149,14 +151,13 @@ abstract class ByteListTranscoder {
         }
     }
 
-    protected void append(int b) {
-        out.append(b);
+    protected final void append(int b) {
+        out.append((byte) b);
     }
 
-    protected void append(byte[] origin, int start, int length) {
+    protected final void append(byte[] origin, int start, int length) {
         out.append(origin, start, length);
     }
-
 
     protected abstract RaiseException invalidUtf8();
 
