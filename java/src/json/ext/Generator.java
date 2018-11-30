@@ -236,10 +236,7 @@ public final class Generator {
         new Handler<RubyBignum>() {
             @Override
             void generate(Session session, RubyBignum object, ByteList buffer) {
-                // JRUBY-4751: RubyBignum.to_s() returns generic object
-                // representation (fixed in 1.5, but we maintain backwards
-                // compatibility; call to_s(IRubyObject[]) then
-                buffer.append(((RubyString)object.to_s(IRubyObject.NULL_ARRAY)).getByteList());
+                buffer.append(((RubyString) object.to_s()).getByteList()); // US-ASCII
             }
         };
 
