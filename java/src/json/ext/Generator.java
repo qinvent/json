@@ -168,6 +168,9 @@ public final class Generator {
     /* Handler base classes */
 
     private static abstract class Handler<T extends IRubyObject> {
+
+        static final ByteList EMPTY = ByteList.EMPTY_BYTELIST;
+
         /**
          * Returns an estimative of how much space the serialization of the
          * given object will take. Used for allocating enough buffer space
@@ -272,30 +275,23 @@ public final class Generator {
                 int depth = state.increaseDepth();
 
                 ByteList indentUnit = state.getIndent();
-                byte[] shift = Utils.repeat(indentUnit, depth);
-
-                ByteList arrayNl = state.getArrayNl();
-                byte[] delim = new byte[1 + arrayNl.length()];
-                delim[0] = ',';
-                System.arraycopy(arrayNl.unsafeBytes(), arrayNl.begin(), delim, 1,
-                        arrayNl.length());
+                byte[] shift = repeat(indentUnit, depth);
 
                 session.infectBy(object);
 
                 buffer.append((byte)'[');
-                buffer.append(arrayNl);
-                boolean firstItem = true;
-                for (int i = 0, t = object.getLength(); i < t; i++) {
-                    IRubyObject element = object.eltInternal(i);
-                    session.infectBy(element);
-                    if (firstItem) {
-                        firstItem = false;
-                    } else {
-                        buffer.append(delim);
-                    }
-                    buffer.append(shift);
-                    Handler<IRubyObject> handler = getHandlerFor(runtime, element);
-                    handler.generate(session, element, buffer);
+
+                ByteList arrayNl = state.getArrayNl();
+                if (arrayNl == EMPTY) {
+                    appendSimple(session, runtime, object, shift, buffer);
+                } else {
+                    buffer.append(arrayNl);
+
+                    byte[] delim = new byte[1 + arrayNl.length()];
+                    delim[0] = ',';
+                    System.arraycopy(arrayNl.unsafeBytes(), arrayNl.begin(), delim, 1, arrayNl.length());
+
+                    appendDelim(session, runtime, object, delim, shift, buffer);
                 }
 
                 state.decreaseDepth();
@@ -305,6 +301,38 @@ public final class Generator {
                 }
 
                 buffer.append((byte)']');
+            }
+
+            private void appendSimple(final Session session, final Ruby runtime, RubyArray object,
+                                      final byte[] shift, final ByteList buffer) {
+                boolean firstItem = true;
+                for (int i = 0; i < object.getLength(); i++) {
+                    IRubyObject element = object.eltInternal(i);
+                    session.infectBy(element);
+                    if (firstItem) {
+                        firstItem = false;
+                    } else {
+                        buffer.append(',');
+                    }
+                    if (shift.length > 0) buffer.append(shift);
+                    getHandlerFor(runtime, element).generate(session, element, buffer);
+                }
+            }
+
+            private void appendDelim(final Session session, final Ruby runtime, RubyArray object,
+                                     final byte[] delim, final byte[] shift, final ByteList buffer) {
+                boolean firstItem = true;
+                for (int i = 0; i < object.getLength(); i++) {
+                    IRubyObject element = object.eltInternal(i);
+                    session.infectBy(element);
+                    if (firstItem) {
+                        firstItem = false;
+                    } else {
+                        buffer.append(delim);
+                    }
+                    if (shift.length > 0) buffer.append(shift);
+                    getHandlerFor(runtime, element).generate(session, element, buffer);
+                }
             }
         };
 
