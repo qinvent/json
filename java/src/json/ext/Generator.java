@@ -411,9 +411,8 @@ public final class Generator {
                 RuntimeInfo info = session.getInfo();
                 RubyString src;
 
-                if (object.encoding(session.getContext()) != info.utf8.get()) {
-                    src = (RubyString)object.encode(session.getContext(),
-                                                    info.utf8.get());
+                if (object.getEncoding() != UTF8) {
+                    src = (RubyString) object.encode(session.context, info.getEncodingUTF8());
                 } else {
                     src = object;
                 }

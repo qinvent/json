@@ -22,36 +22,31 @@ import org.jruby.util.ByteList;
 class GeneratorMethods {
     /**
      * Populates the given module with all modules and their methods
-     * @param info
-     * @param generatorMethodsModule The module to populate
-     * (normally <code>JSON::Generator::GeneratorMethods</code>)
+     * @param self (normally <code>JSON::Generator::GeneratorMethods</code>)
      */
-    static void populate(RuntimeInfo info, RubyModule module) {
-        defineMethods(module, "Array",      RbArray.class);
-        defineMethods(module, "FalseClass", RbFalse.class);
-        defineMethods(module, "Float",      RbFloat.class);
-        defineMethods(module, "Hash",       RbHash.class);
-        defineMethods(module, "Integer",    RbInteger.class);
-        defineMethods(module, "NilClass",   RbNil.class);
-        defineMethods(module, "Object",     RbObject.class);
-        defineMethods(module, "String",     RbString.class);
-        defineMethods(module, "TrueClass",  RbTrue.class);
+    static void populate(RubyModule self) {
+        defineMethods(self, "Array",      RbArray.class);
+        defineMethods(self, "FalseClass", RbFalse.class);
+        defineMethods(self, "Float",      RbFloat.class);
+        defineMethods(self, "Hash",       RbHash.class);
+        defineMethods(self, "Integer",    RbInteger.class);
+        defineMethods(self, "NilClass",   RbNil.class);
+        defineMethods(self, "Object",     RbObject.class);
+        defineMethods(self, "String",     RbString.class);
+        defineMethods(self, "TrueClass",  RbTrue.class);
 
-        info.stringExtendModule = new WeakReference<RubyModule>(module.defineModuleUnder("String")
-                                            .defineModuleUnder("Extend"));
-        info.stringExtendModule.get().defineAnnotatedMethods(StringExtend.class);
+        RubyModule StringExtend = self.defineModuleUnder("String").defineModuleUnder("Extend");
+        StringExtend.defineAnnotatedMethods(StringExtend.class);
     }
 
     /**
      * Convenience method for defining methods on a submodule.
-     * @param parentModule
-     * @param submoduleName
+     * @param parent
+     * @param subName
      * @param klass
      */
-    private static void defineMethods(RubyModule parentModule,
-            String submoduleName, Class klass) {
-        RubyModule submodule = parentModule.defineModuleUnder(submoduleName);
-        submodule.defineAnnotatedMethods(klass);
+    private static void defineMethods(RubyModule parent, String subName, Class klass) {
+        parent.defineModuleUnder(subName).defineAnnotatedMethods(klass);
     }
 
 
@@ -115,11 +110,10 @@ class GeneratorMethods {
         }
 
         private static RubyHash toJsonRawObject(ThreadContext context, RubyString self) {
-            Ruby runtime = context.getRuntime();
+            final Ruby runtime = context.runtime;
             RubyHash result = RubyHash.newHash(runtime);
 
-            IRubyObject createId = RuntimeInfo.forRuntime(runtime)
-                    .jsonModule.get().callMethod(context, "create_id");
+            IRubyObject createId = runtime.getModule("JSON").callMethod(context, "create_id");
             result.op_aset(context, createId, self.getMetaClass().to_s());
 
             ByteList bl = self.getByteList();
@@ -134,10 +128,9 @@ class GeneratorMethods {
         }
 
         @JRubyMethod(required=1, module=true)
-        public static IRubyObject included(ThreadContext context,
-                IRubyObject vSelf, IRubyObject module) {
-            RuntimeInfo info = RuntimeInfo.forRuntime(context.getRuntime());
-            return module.callMethod(context, "extend", info.stringExtendModule.get());
+        public static IRubyObject included(ThreadContext context, IRubyObject self, IRubyObject module) {
+            RuntimeInfo info = RuntimeInfo.forRuntime(context.runtime);
+            return module.callMethod(context, "extend", info.getStringExtend());
         }
     }
 

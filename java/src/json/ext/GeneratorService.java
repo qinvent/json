@@ -5,9 +5,6 @@
  */
 package json.ext;
 
-import java.io.IOException;
-import java.lang.ref.WeakReference;
-
 import org.jruby.Ruby;
 import org.jruby.RubyClass;
 import org.jruby.RubyModule;
@@ -19,24 +16,22 @@ import org.jruby.runtime.load.BasicLibraryService;
  * @author mernen
  */
 public class GeneratorService implements BasicLibraryService {
-    public boolean basicLoad(Ruby runtime) throws IOException {
+
+    public boolean basicLoad(Ruby runtime) {
         runtime.getLoadService().require("json/common");
-        RuntimeInfo info = RuntimeInfo.initRuntime(runtime);
 
-        info.jsonModule = new WeakReference<RubyModule>(runtime.defineModule("JSON"));
-        RubyModule jsonExtModule = info.jsonModule.get().defineModuleUnder("Ext");
-        RubyModule generatorModule = jsonExtModule.defineModuleUnder("Generator");
+        RubyModule JSON = runtime.defineModule("JSON");
+        RubyModule Generator = JSON.defineModuleUnder("Ext").defineModuleUnder("Generator");
 
-        RubyClass stateClass =
-            generatorModule.defineClassUnder("State", runtime.getObject(),
-                                             GeneratorState.ALLOCATOR);
-        stateClass.defineAnnotatedMethods(GeneratorState.class);
-        info.generatorStateClass = new WeakReference<RubyClass>(stateClass);
+        RubyClass State = Generator.defineClassUnder("State", runtime.getObject(), GeneratorState.ALLOCATOR);
+        State.defineAnnotatedMethods(GeneratorState.class);
 
-        RubyModule generatorMethods =
-            generatorModule.defineModuleUnder("GeneratorMethods");
-        GeneratorMethods.populate(info, generatorMethods);
+        RubyModule generatorMethods = Generator.defineModuleUnder("GeneratorMethods");
+        GeneratorMethods.populate(generatorMethods);
+
+        RuntimeInfo.forRuntime(runtime); // initialize
 
         return true;
     }
+
 }

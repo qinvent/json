@@ -28,7 +28,10 @@ import org.jruby.runtime.Visibility;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.jruby.util.ByteList;
 import org.jruby.util.ConvertBytes;
+
 import static org.jruby.util.ConvertDouble.DoubleConverter;
+import static json.ext.Utils.ASCII_8BIT;
+import static json.ext.Utils.UTF8;
 
 /**
  * The <code>JSON::Ext::Parser</code> class.
@@ -184,45 +187,18 @@ public class Parser extends RubyObject {
      * a converted copy is returned.
      * Returns the source string if no conversion is needed.
      */
-    private RubyString convertEncoding(ThreadContext context, RubyString source) {
-      RubyEncoding encoding = (RubyEncoding)source.encoding(context);
-      if (encoding == info.ascii8bit.get()) {
-          if (source.isFrozen()) {
-            source = (RubyString) source.dup();
-          }
-          source.force_encoding(context, info.utf8.get());
-      } else {
-        source = (RubyString) source.encode(context, info.utf8.get());
-      }
-      return source;
-    }
-
-    /**
-     * Checks the first four bytes of the given ByteList to infer its encoding,
-     * using the principle demonstrated on section 3 of RFC 4627 (JSON).
-     */
-    private static String sniffByteList(ByteList bl) {
-        if (bl.length() < 4) return null;
-        if (bl.get(0) == 0 && bl.get(2) == 0) {
-            return bl.get(1) == 0 ? "utf-32be" : "utf-16be";
+    private static RubyString convertEncoding(ThreadContext context, RubyString source) {
+        if (source.getEncoding() == UTF8) {
+            return source;
         }
-        if (bl.get(1) == 0 && bl.get(3) == 0) {
-            return bl.get(2) == 0 ? "utf-32le" : "utf-16le";
+        if (source.getEncoding() == ASCII_8BIT) {
+            if (source.isFrozen()) {
+                source = (RubyString) source.dup();
+            }
+            source.associateEncoding(UTF8);
+            return source;
         }
-        return null;
-    }
-
-    /**
-     * Assumes the given (binary) RubyString to be in the given encoding, then
-     * converts it to UTF-8.
-     */
-    private RubyString reinterpretEncoding(ThreadContext context,
-            RubyString str, String sniffedEncoding) {
-        RubyEncoding actualEncoding = info.getEncoding(context, sniffedEncoding);
-        RubyEncoding targetEncoding = info.utf8.get();
-        RubyString dup = (RubyString)str.dup();
-        dup.force_encoding(context, actualEncoding);
-        return (RubyString)dup.encode_bang(context, targetEncoding);
+        return (RubyString) source.encode(context, context.runtime.getEncodingService().getEncoding(UTF8));
     }
 
     /**
@@ -260,7 +236,7 @@ public class Parser extends RubyObject {
      * set to <code>nil</code> or <code>false</code>, and a String if not.
      */
     private RubyString getCreateId(ThreadContext context) {
-        IRubyObject v = info.jsonModule.get().callMethod(context, "create_id");
+        IRubyObject v = info.JSON.callMethod(context, "create_id");
         return v.isTrue() ? v.convertToString() : null;
     }
 
@@ -1463,7 +1439,7 @@ case 5:
 
             if (cs >= JSON_string_first_final && result != null) {
                 if (result instanceof RubyString) {
-                  ((RubyString)result).force_encoding(context, info.utf8.get());
+                    ((RubyString) result).associateEncoding(UTF8);
                 }
                 res.update(result, p + 1);
             } else {
@@ -2065,8 +2041,7 @@ case 5:
 
                 if (!vKlassName.isNil()) {
                     // might throw ArgumentError, we let it propagate
-                    IRubyObject klass = parser.info.jsonModule.get().
-                            callMethod(context, "deep_const_get", vKlassName);
+                    IRubyObject klass = parser.info.JSON.callMethod(context, "deep_const_get", vKlassName);
                     if (klass.respondsTo("json_creatable?") &&
                         klass.callMethod(context, "json_creatable?").isTrue()) {
 
@@ -2342,7 +2317,7 @@ case 5:
          * @param name The constant name
          */
         private IRubyObject getConstant(String name) {
-            return parser.info.jsonModule.get().getConstant(name);
+            return parser.info.JSON.getConstant(name);
         }
 
         private RaiseException newException(String className, String message) {

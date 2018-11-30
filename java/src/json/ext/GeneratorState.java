@@ -114,24 +114,17 @@ public class GeneratorState extends RubyObject {
      * configured by <codes>opts</code>, something else to create an
      * unconfigured instance. If <code>opts</code> is a <code>State</code>
      * object, it is just returned.
-     * @param clazzParam The receiver of the method call
+     * @param klass The receiver of the method call
      *                   ({@link RubyClass} <code>State</code>)
      * @param opts The object to use as a base for the new <code>State</code>
-     * @param block The block passed to the method
      * @return A <code>GeneratorState</code> as determined above
      */
     @JRubyMethod(meta=true)
-    public static IRubyObject from_state(ThreadContext context,
-            IRubyObject klass, IRubyObject opts) {
-        return fromState(context, opts);
+    public static IRubyObject from_state(ThreadContext context, IRubyObject klass, IRubyObject opts) {
+        return fromState(context, RuntimeInfo.forRuntime(context.runtime), (RubyClass) klass, opts);
     }
 
-    static GeneratorState fromState(ThreadContext context, IRubyObject opts) {
-        return fromState(context, RuntimeInfo.forRuntime(context.getRuntime()), opts);
-    }
-
-    static GeneratorState fromState(ThreadContext context, RuntimeInfo info, IRubyObject opts) {
-        RubyClass klass = info.generatorStateClass.get();
+    static GeneratorState fromState(ThreadContext context, RuntimeInfo info, RubyClass klass, IRubyObject opts) {
         if (opts != null) {
             // if the given parameter is a Generator::State, return itself
             if (klass.isInstance(opts)) return (GeneratorState) opts;
@@ -141,9 +134,8 @@ public class GeneratorState extends RubyObject {
                 return (GeneratorState) klass.newInstance(context, opts, Block.NULL_BLOCK);
             }
         }
-
         // for other values, return the safe prototype
-        return (GeneratorState) info.getSafeStatePrototype(context).dup();
+        return (GeneratorState) info.getSafeStatePrototype().dup(); // JSON::SAFE_STATE_PROTOTYPE.dup
     }
 
     /**
@@ -433,18 +425,18 @@ public class GeneratorState extends RubyObject {
         Ruby runtime = context.getRuntime();
         RubyHash result = RubyHash.newHash(runtime);
 
-        result.op_aset(context, runtime.newSymbol("indent"), indent_get(context));
-        result.op_aset(context, runtime.newSymbol("space"), space_get(context));
-        result.op_aset(context, runtime.newSymbol("space_before"), space_before_get(context));
-        result.op_aset(context, runtime.newSymbol("object_nl"), object_nl_get(context));
-        result.op_aset(context, runtime.newSymbol("array_nl"), array_nl_get(context));
-        result.op_aset(context, runtime.newSymbol("allow_nan"), allow_nan_p(context));
-        result.op_aset(context, runtime.newSymbol("ascii_only"), ascii_only_p(context));
-        result.op_aset(context, runtime.newSymbol("max_nesting"), max_nesting_get(context));
-        result.op_aset(context, runtime.newSymbol("depth"), depth_get(context));
-        result.op_aset(context, runtime.newSymbol("buffer_initial_length"), buffer_initial_length_get(context));
+        result.fastASet(runtime.newSymbol("indent"), indent_get(context));
+        result.fastASet(runtime.newSymbol("space"), space_get(context));
+        result.fastASet(runtime.newSymbol("space_before"), space_before_get(context));
+        result.fastASet(runtime.newSymbol("object_nl"), object_nl_get(context));
+        result.fastASet(runtime.newSymbol("array_nl"), array_nl_get(context));
+        result.fastASet(runtime.newSymbol("allow_nan"), allow_nan_p(context));
+        result.fastASet(runtime.newSymbol("ascii_only"), ascii_only_p(context));
+        result.fastASet(runtime.newSymbol("max_nesting"), max_nesting_get(context));
+        result.fastASet(runtime.newSymbol("depth"), depth_get(context));
+        result.fastASet(runtime.newSymbol("buffer_initial_length"), buffer_initial_length_get(context));
         for (String name: getInstanceVariableNameList()) {
-            result.op_aset(context, runtime.newSymbol(name.substring(1)), getInstanceVariables().getInstanceVariable(name));
+            result.fastASet(runtime.newSymbol(name.substring(1)), getInstanceVariables().getInstanceVariable(name));
         }
         return result;
     }
@@ -461,8 +453,6 @@ public class GeneratorState extends RubyObject {
 
     /**
      * Checks if the current depth is allowed as per this state's options.
-     * @param context
-     * @param depth The corrent depth
      */
     private void checkMaxNesting() {
         if (maxNesting != 0 && depth > maxNesting) {

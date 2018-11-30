@@ -5,112 +5,90 @@
  */
 package json.ext;
 
-import java.lang.ref.WeakReference;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.WeakHashMap;
 import org.jruby.Ruby;
 import org.jruby.RubyClass;
 import org.jruby.RubyEncoding;
 import org.jruby.RubyModule;
-import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
+import static json.ext.Utils.UTF8;
 
 final class RuntimeInfo {
-    // since the vast majority of cases runs just one runtime,
-    // we optimize for that
-    private static WeakReference<Ruby> runtime1 = new WeakReference<Ruby>(null);
-    private static RuntimeInfo info1;
-    // store remaining runtimes here (does not include runtime1)
-    private static Map<Ruby, RuntimeInfo> runtimes;
 
-    // these fields are filled by the service loaders
-    // Use WeakReferences so that RuntimeInfo doesn't indirectly hold a hard reference to
-    // the Ruby runtime object, which would cause memory leaks in the runtimes map above.
-    /** JSON */
-    WeakReference<RubyModule> jsonModule;
-    /** JSON::Ext::Generator::GeneratorMethods::String::Extend */
-    WeakReference<RubyModule> stringExtendModule;
-    /** JSON::Ext::Generator::State */
-    WeakReference<RubyClass> generatorStateClass;
-    /** JSON::SAFE_STATE_PROTOTYPE */
-    WeakReference<GeneratorState> safeStatePrototype;
-
-    final WeakReference<RubyEncoding> utf8;
-    final WeakReference<RubyEncoding> ascii8bit;
-    // other encodings
-    private final Map<String, WeakReference<RubyEncoding>> encodings;
-
-    private RuntimeInfo(Ruby runtime) {
-        RubyClass encodingClass = runtime.getEncoding();
-        if (encodingClass == null) { // 1.8 mode
-            utf8 = ascii8bit = null;
-            encodings = null;
-        } else {
-            ThreadContext context = runtime.getCurrentContext();
-
-            utf8 = new WeakReference<RubyEncoding>((RubyEncoding)RubyEncoding.find(context,
-                    encodingClass, runtime.newString("utf-8")));
-            ascii8bit = new WeakReference<RubyEncoding>((RubyEncoding)RubyEncoding.find(context,
-                    encodingClass, runtime.newString("ascii-8bit")));
-            encodings = new HashMap<String, WeakReference<RubyEncoding>>();
-        }
-    }
-
-    static RuntimeInfo initRuntime(Ruby runtime) {
-        synchronized (RuntimeInfo.class) {
-            if (runtime1.get() == runtime) {
-                return info1;
-            } else if (runtime1.get() == null) {
-                runtime1 = new WeakReference<Ruby>(runtime);
-                info1 = new RuntimeInfo(runtime);
-                return info1;
-            } else {
-                if (runtimes == null) {
-                    runtimes = new WeakHashMap<Ruby, RuntimeInfo>(1);
-                }
-                RuntimeInfo cache = runtimes.get(runtime);
-                if (cache == null) {
-                    cache = new RuntimeInfo(runtime);
-                    runtimes.put(runtime, cache);
-                }
-                return cache;
-            }
+    static RuntimeInfo initRuntime(Ruby runtime, final RubyModule JSON) {
+        synchronized (runtime) {
+            RuntimeInfo info = new RuntimeInfo(runtime);
+            JSON.dataWrapStruct(info);
+            return info;
         }
     }
 
     public static RuntimeInfo forRuntime(Ruby runtime) {
-        synchronized (RuntimeInfo.class) {
-            if (runtime1.get() == runtime) return info1;
-            RuntimeInfo cache = null;
-            if (runtimes != null) cache = runtimes.get(runtime);
-            assert cache != null : "Runtime given has not initialized JSON::Ext";
-            return cache;
-        }
-    }
-
-    public RubyEncoding getEncoding(ThreadContext context, String name) {
-        synchronized (encodings) {
-            WeakReference<RubyEncoding> encoding = encodings.get(name);
-            if (encoding == null) {
-                Ruby runtime = context.getRuntime();
-                encoding = new WeakReference<RubyEncoding>((RubyEncoding)RubyEncoding.find(context,
-                        runtime.getEncoding(), runtime.newString(name)));
-                encodings.put(name, encoding);
+        RubyModule JSON = runtime.getModule("JSON");
+        Object info = JSON.dataGetStruct();
+        if (info == null) {
+            synchronized (runtime) {
+                info = JSON.dataGetStruct();
+                if (info == null) info = initRuntime(runtime, JSON);
             }
-            return encoding.get();
         }
+        return (RuntimeInfo) info;
     }
 
-    public GeneratorState getSafeStatePrototype(ThreadContext context) {
-        if (safeStatePrototype == null) {
-            IRubyObject value = jsonModule.get().getConstant("SAFE_STATE_PROTOTYPE");
+    final RubyModule JSON; // JSON
+
+    private transient RubyClass GeneratorState; // JSON::Ext::Generator::State
+    private transient RubyModule StringExtend; // JSON::Ext::Generator::GeneratorMethods::String::Extend
+
+    private RuntimeInfo(Ruby runtime) {
+        JSON = runtime.getModule("JSON");
+    }
+
+    public RubyClass getGeneratorState() {
+        final RubyClass mod = GeneratorState;
+        if (mod == null) {
+            return GeneratorState = getGenerator().getClass("State");
+        }
+        return mod;
+    }
+
+    private RubyModule getGenerator() {
+        return (RubyModule) ((RubyModule) JSON.getConstantAt("Ext")).getConstantAt("Generator");
+    }
+
+    RubyModule getStringExtend() {
+        final RubyModule mod = StringExtend;
+        if (mod == null) {
+            return StringExtend = (RubyModule) ((RubyModule)
+                    ((RubyModule) getGenerator().getConstantAt("GeneratorMethods"))
+                            .getConstantAt("String")).getConstantAt("Extend");
+        }
+        return mod;
+    }
+
+    private transient GeneratorState SAFE_STATE_PROTOTYPE; // JSON::SAFE_STATE_PROTOTYPE
+
+    GeneratorState getSafeStatePrototype() {
+        GeneratorState prototype = SAFE_STATE_PROTOTYPE;
+        if (prototype == null) {
+            IRubyObject value = JSON.getConstant("SAFE_STATE_PROTOTYPE");
             if (!(value instanceof GeneratorState)) {
-                throw context.getRuntime().newTypeError(value, generatorStateClass.get());
+                final Ruby runtime = JSON.getRuntime();
+                throw runtime.newTypeError(value, getGeneratorState());
             }
-            safeStatePrototype = new WeakReference<GeneratorState>((GeneratorState)value);
+            return SAFE_STATE_PROTOTYPE = (GeneratorState) value;
         }
-        return safeStatePrototype.get();
+        return prototype;
     }
+
+    transient RubyEncoding encodingUTF8;
+
+    RubyEncoding getEncodingUTF8() {
+        if (encodingUTF8 == null) {
+            final Ruby runtime = JSON.getRuntime();
+            return encodingUTF8 = runtime.getEncodingService().getEncoding(UTF8);
+        }
+        return encodingUTF8;
+    }
+
 }
