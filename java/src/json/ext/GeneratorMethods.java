@@ -150,20 +150,18 @@ class GeneratorMethods {
          * module method.
          */
         @JRubyMethod(required=1)
-        public static IRubyObject json_create(ThreadContext context,
-                IRubyObject vSelf, IRubyObject vHash) {
+        public static IRubyObject json_create(ThreadContext context, IRubyObject self, IRubyObject hash) {
             final Ruby runtime = context.runtime;
-            RubyHash hash = Utils.ensureHash(runtime, vHash);
-            IRubyObject rawData = hash.fastARef(runtime.newString("raw"));
+            IRubyObject rawData = Utils.ensureHash(hash).fastARef(runtime.newString("raw"));
             if (rawData == null) {
                 throw runtime.newArgumentError("\"raw\" value not defined for encoded String");
             }
-            RubyArray ary = Utils.ensureArray(runtime, rawData);
+            RubyArray ary = Utils.ensureArray(rawData);
             byte[] bytes = new byte[ary.getLength()];
             for (int i = 0, t = ary.getLength(); i < t; i++) {
                 IRubyObject element = ary.eltInternal(i);
                 if (element instanceof RubyFixnum) {
-                    bytes[i] = (byte)RubyNumeric.fix2long(element);
+                    bytes[i] = (byte) RubyNumeric.fix2long(element);
                 } else {
                     throw runtime.newTypeError(element, runtime.getFixnum());
                 }

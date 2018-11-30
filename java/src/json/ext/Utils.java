@@ -49,15 +49,13 @@ final class Utils {
      *                        of the expected type
      */
     static RubyArray ensureArray(IRubyObject object) throws RaiseException {
-        if (object instanceof RubyArray) return (RubyArray)object;
-        Ruby runtime = object.getRuntime();
-        throw runtime.newTypeError(object, runtime.getArray());
+        if (object instanceof RubyArray) return (RubyArray) object;
+        return object.convertToArray();
     }
 
     static RubyHash ensureHash(IRubyObject object) throws RaiseException {
-        if (object instanceof RubyHash) return (RubyHash)object;
-        Ruby runtime = object.getRuntime();
-        throw runtime.newTypeError(object, runtime.getHash());
+        if (object instanceof RubyHash) return (RubyHash) object;
+        return object.convertToHash();
     }
 
     static RubyString ensureString(IRubyObject object) throws RaiseException {
