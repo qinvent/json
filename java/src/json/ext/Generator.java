@@ -14,9 +14,8 @@ import org.jruby.RubyClass;
 import org.jruby.RubyFixnum;
 import org.jruby.RubyFloat;
 import org.jruby.RubyHash;
-import org.jruby.RubyNumeric;
+import org.jruby.RubyNil;
 import org.jruby.RubyString;
-import org.jruby.runtime.ClassIndex;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.jruby.util.ByteList;
@@ -32,8 +31,7 @@ public final class Generator {
     static <T extends IRubyObject> RubyString
             generateJson(ThreadContext context, T object,
                          Handler<? super T> handler, IRubyObject[] args) {
-        Session session = new Session(context, args.length > 0 ? args[0]
-                                                               : null);
+        Session session = new Session(context, args.length > 0 ? args[0] : null);
         return session.infect(handler.generateNew(session, object));
     }
 
@@ -43,8 +41,7 @@ public final class Generator {
      */
     static <T extends IRubyObject> RubyString
             generateJson(ThreadContext context, T object, IRubyObject[] args) {
-        Handler<? super T> handler = getHandlerFor(context.getRuntime(), object);
-        return generateJson(context, object, handler, args);
+        return generateJson(context, object, getHandlerFor(context.runtime, object), args);
     }
 
     /**
@@ -52,11 +49,8 @@ public final class Generator {
      * handler if one is found or calling #to_json if not.
      */
     public static <T extends IRubyObject> RubyString
-            generateJson(ThreadContext context, T object,
-                         GeneratorState config) {
-        Session session = new Session(context, config);
-        Handler<? super T> handler = getHandlerFor(context.getRuntime(), object);
-        return handler.generateNew(session, object);
+            generateJson(ThreadContext context, T object, GeneratorState config) {
+        return getHandlerFor(context.runtime, object).generateNew(new Session(context, config), object);
     }
 
     // NOTE: drop this once Ruby 1.9.3 support is gone!
@@ -410,12 +404,9 @@ public final class Generator {
             }
         };
 
-    static final Handler<RubyBoolean> TRUE_HANDLER =
-        new KeywordHandler<RubyBoolean>("true");
-    static final Handler<RubyBoolean> FALSE_HANDLER =
-        new KeywordHandler<RubyBoolean>("false");
-    static final Handler<IRubyObject> NIL_HANDLER =
-        new KeywordHandler<IRubyObject>("null");
+    static final Handler<RubyBoolean> TRUE_HANDLER = new KeywordHandler<RubyBoolean>("true");
+    static final Handler<RubyBoolean> FALSE_HANDLER = new KeywordHandler<RubyBoolean>("false");
+    static final Handler<RubyNil> NIL_HANDLER = new KeywordHandler<RubyNil>("null");
 
     /**
      * The default handler (<code>Object#to_json</code>): coerces the object
