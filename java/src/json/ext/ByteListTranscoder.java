@@ -14,7 +14,7 @@ import org.jruby.util.ByteList;
  * using UTF-8 ByteLists as both input and output.
  */
 abstract class ByteListTranscoder {
-    final ThreadContext context;
+    protected final ThreadContext context;
 
     protected ByteList src;
     protected int srcEnd;
