@@ -12,13 +12,12 @@ import org.jruby.RubyEncoding;
 import org.jruby.RubyFloat;
 import org.jruby.RubyHash;
 import org.jruby.RubyInteger;
-import org.jruby.RubyModule;
-import org.jruby.RubyNumeric;
 import org.jruby.RubyObject;
 import org.jruby.RubyString;
 import org.jruby.anno.JRubyMethod;
 import org.jruby.exceptions.JumpException;
 import org.jruby.exceptions.RaiseException;
+import org.jruby.ext.bigdecimal.RubyBigDecimal;
 import org.jruby.runtime.Block;
 import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
@@ -26,7 +25,10 @@ import org.jruby.runtime.Visibility;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.jruby.util.ByteList;
 import org.jruby.util.ConvertBytes;
+
 import static org.jruby.util.ConvertDouble.DoubleConverter;
+import static json.ext.Utils.ASCII_8BIT;
+import static json.ext.Utils.UTF8;
 
 /**
  * The <code>JSON::Ext::Parser</code> class.
@@ -53,7 +55,7 @@ public class Parser extends RubyObject {
     private RubyClass objectClass;
     private RubyClass arrayClass;
     private RubyClass decimalClass;
-    private RubyHash match_string;
+    private RubyHash matchString;
 
     private static final int DEFAULT_MAX_NESTING = 100;
 
@@ -149,7 +151,7 @@ public class Parser extends RubyObject {
 
     @JRubyMethod(required = 1, optional = 1, visibility = Visibility.PRIVATE)
     public IRubyObject initialize(ThreadContext context, IRubyObject[] args) {
-        Ruby runtime = context.getRuntime();
+        Ruby runtime = context.runtime;
         if (this.vSource != null) {
             throw runtime.newTypeError("already initialized instance");
          }
@@ -163,16 +165,15 @@ public class Parser extends RubyObject {
         this.objectClass     = opts.getClass("object_class", runtime.getHash());
         this.arrayClass      = opts.getClass("array_class", runtime.getArray());
         this.decimalClass    = opts.getClass("decimal_class", null);
-        this.match_string    = opts.getHash("match_string");
+        this.matchString     = opts.getHash("match_string");
 
-        if(symbolizeNames && createAdditions) {
-          throw runtime.newArgumentError(
-            "options :symbolize_names and :create_additions cannot be " +
-            " used in conjunction"
-          );
+        if (symbolizeNames && createAdditions) {
+            throw runtime.newArgumentError(
+                "options :symbolize_names and :create_additions cannot be " +
+                " used in conjunction"
+            );
         }
-        this.vSource = args[0].convertToString();
-        this.vSource = convertEncoding(context, vSource);
+        this.vSource = convertEncoding(context, args[0].convertToString());
 
         return this;
     }
@@ -182,45 +183,18 @@ public class Parser extends RubyObject {
      * a converted copy is returned.
      * Returns the source string if no conversion is needed.
      */
-    private RubyString convertEncoding(ThreadContext context, RubyString source) {
-      RubyEncoding encoding = (RubyEncoding)source.encoding(context);
-      if (encoding == info.ascii8bit.get()) {
-          if (source.isFrozen()) {
-            source = (RubyString) source.dup();
-          }
-          source.force_encoding(context, info.utf8.get());
-      } else {
-        source = (RubyString) source.encode(context, info.utf8.get());
-      }
-      return source;
-    }
-
-    /**
-     * Checks the first four bytes of the given ByteList to infer its encoding,
-     * using the principle demonstrated on section 3 of RFC 4627 (JSON).
-     */
-    private static String sniffByteList(ByteList bl) {
-        if (bl.length() < 4) return null;
-        if (bl.get(0) == 0 && bl.get(2) == 0) {
-            return bl.get(1) == 0 ? "utf-32be" : "utf-16be";
+    private static RubyString convertEncoding(ThreadContext context, RubyString source) {
+        if (source.getEncoding() == UTF8) {
+            return source;
         }
-        if (bl.get(1) == 0 && bl.get(3) == 0) {
-            return bl.get(2) == 0 ? "utf-32le" : "utf-16le";
+        if (source.getEncoding() == ASCII_8BIT) {
+            if (source.isFrozen()) {
+                source = (RubyString) source.dup();
+            }
+            source.associateEncoding(UTF8);
+            return source;
         }
-        return null;
-    }
-
-    /**
-     * Assumes the given (binary) RubyString to be in the given encoding, then
-     * converts it to UTF-8.
-     */
-    private RubyString reinterpretEncoding(ThreadContext context,
-            RubyString str, String sniffedEncoding) {
-        RubyEncoding actualEncoding = info.getEncoding(context, sniffedEncoding);
-        RubyEncoding targetEncoding = info.utf8.get();
-        RubyString dup = (RubyString)str.dup();
-        dup.force_encoding(context, actualEncoding);
-        return (RubyString)dup.encode_bang(context, targetEncoding);
+        return (RubyString) source.encode(context, context.runtime.getEncodingService().getEncoding(UTF8));
     }
 
     /**
@@ -246,11 +220,8 @@ public class Parser extends RubyObject {
     }
 
     public RubyString checkAndGetSource() {
-      if (vSource != null) {
-        return vSource;
-      } else {
+        if (vSource != null) return vSource;
         throw getRuntime().newTypeError("uninitialized instance");
-      }
     }
 
     /**
@@ -258,7 +229,7 @@ public class Parser extends RubyObject {
      * set to <code>nil</code> or <code>false</code>, and a String if not.
      */
     private RubyString getCreateId(ThreadContext context) {
-        IRubyObject v = info.jsonModule.get().callMethod(context, "create_id");
+        IRubyObject v = info.JSON.callMethod(context, "create_id");
         return v.isTrue() ? v.convertToString() : null;
     }
 
@@ -295,7 +266,7 @@ public class Parser extends RubyObject {
             this.byteList = parser.checkAndGetSource().getByteList();
             this.data = byteList.unsafeBytes();
             this.view = new ByteList(data, false);
-            this.decoder = new StringDecoder(context);
+            this.decoder = new StringDecoder(context.runtime);
             this.dc = new DoubleConverter();
         }
 
@@ -307,7 +278,7 @@ public class Parser extends RubyObject {
         }
 
         private Ruby getRuntime() {
-            return context.getRuntime();
+            return context.runtime;
         }
 
         %%{
@@ -497,16 +468,10 @@ public class Parser extends RubyObject {
         }
 
         RubyInteger createInteger(int p, int new_p) {
-            Ruby runtime = getRuntime();
             ByteList num = absSubSequence(p, new_p);
-            return bytesToInum(runtime, num);
+            return ConvertBytes.byteListToInum19(context.runtime, num, 10, true);
         }
 
-        RubyInteger bytesToInum(Ruby runtime, ByteList num) {
-            return runtime.is1_9() ?
-                    ConvertBytes.byteListToInum19(runtime, num, 10, true) :
-                    ConvertBytes.byteListToInum(runtime, num, 10, true);
-        }
 
         %%{
             machine JSON_float;
@@ -531,9 +496,9 @@ public class Parser extends RubyObject {
                 res.update(null, p);
                 return;
             }
-            IRubyObject number = parser.decimalClass == null ?
-                createFloat(p, new_p) : createCustomDecimal(p, new_p);
 
+            final RubyClass decimalClass = parser.decimalClass;
+            IRubyObject number = decimalClass == null ? createFloat(p, new_p) : createDecimal(decimalClass, p, new_p);
             res.update(number, new_p + 1);
             return;
         }
@@ -553,16 +518,17 @@ public class Parser extends RubyObject {
         }
 
         RubyFloat createFloat(int p, int new_p) {
-            Ruby runtime = getRuntime();
             ByteList num = absSubSequence(p, new_p);
-            return RubyFloat.newFloat(runtime, dc.parse(num, true, runtime.is1_9()));
+            return RubyFloat.newFloat(context.runtime, dc.parse(num, true, true));
         }
 
-        IRubyObject createCustomDecimal(int p, int new_p) {
-            Ruby runtime = getRuntime();
+        IRubyObject createDecimal(RubyClass klass, int p, int new_p) {
             ByteList num = absSubSequence(p, new_p);
-            IRubyObject numString = runtime.newString(num.toString());
-            return parser.decimalClass.callMethod(context, "new", numString);
+            RubyString numStr = context.runtime.newString(num);
+            if ("BigDecimal".equals(klass.getName())) {
+                return RubyBigDecimal.newInstance(context, klass, numStr);
+            }
+            return klass.callMethod(context, "new", numStr);
         }
 
         %%{
@@ -633,7 +599,7 @@ public class Parser extends RubyObject {
 
             if (cs >= JSON_string_first_final && result != null) {
                 if (result instanceof RubyString) {
-                  ((RubyString)result).force_encoding(context, info.utf8.get());
+                    ((RubyString) result).associateEncoding(UTF8);
                 }
                 res.update(result, p + 1);
             } else {
@@ -653,7 +619,7 @@ public class Parser extends RubyObject {
                     fhold;
                     fbreak;
                 } else {
-                    if (parser.arrayClass == getRuntime().getArray()) {
+                    if (parser.arrayClass == context.runtime.getArray()) {
                         ((RubyArray)result).append(res.result);
                     } else {
                         result.callMethod(context, "<<", res.result);
@@ -689,11 +655,10 @@ public class Parser extends RubyObject {
             }
 
             IRubyObject result;
-            if (parser.arrayClass == getRuntime().getArray()) {
-                result = RubyArray.newArray(getRuntime());
+            if (parser.arrayClass == context.runtime.getArray()) {
+                result = RubyArray.newArray(context.runtime);
             } else {
-                result = parser.arrayClass.newInstance(context,
-                        IRubyObject.NULL_ARRAY, Block.NULL_BLOCK);
+                result = parser.arrayClass.newInstance(context, Block.NULL_BLOCK);
             }
 
             %% write init;
@@ -718,8 +683,8 @@ public class Parser extends RubyObject {
                     fhold;
                     fbreak;
                 } else {
-                    if (parser.objectClass == getRuntime().getHash()) {
-                        ((RubyHash)result).op_aset(context, lastName, res.result);
+                    if (parser.objectClass == context.runtime.getHash()) {
+                        ((RubyHash)result).fastASetCheckString(context.runtime, lastName, res.result);
                     } else {
                         result.callMethod(context, "[]=", new IRubyObject[] { lastName, res.result });
                     }
@@ -735,9 +700,7 @@ public class Parser extends RubyObject {
                 } else {
                     RubyString name = (RubyString)res.result;
                     if (parser.symbolizeNames) {
-                        lastName = context.getRuntime().is1_9()
-                                       ? name.intern19()
-                                       : name.intern();
+                        lastName = name.intern19();
                     } else {
                         lastName = name;
                     }
@@ -772,12 +735,11 @@ public class Parser extends RubyObject {
             // this is guaranteed to be a RubyHash due to the earlier
             // allocator test at OptionsReader#getClass
             IRubyObject result;
-            if (parser.objectClass == getRuntime().getHash()) {
-                result = RubyHash.newHash(getRuntime());
+            if (parser.objectClass == context.runtime.getHash()) {
+                result = RubyHash.newHash(context.runtime);
             } else {
                 objectDefault = false;
-                result = parser.objectClass.newInstance(context,
-                        IRubyObject.NULL_ARRAY, Block.NULL_BLOCK);
+                result = parser.objectClass.newInstance(context, Block.NULL_BLOCK);
             }
 
             %% write init;
@@ -801,8 +763,7 @@ public class Parser extends RubyObject {
 
                 if (!vKlassName.isNil()) {
                     // might throw ArgumentError, we let it propagate
-                    IRubyObject klass = parser.info.jsonModule.get().
-                            callMethod(context, "deep_const_get", vKlassName);
+                    IRubyObject klass = parser.info.JSON.callMethod(context, "deep_const_get", vKlassName);
                     if (klass.respondsTo("json_creatable?") &&
                         klass.callMethod(context, "json_creatable?").isTrue()) {
 
@@ -873,7 +834,7 @@ public class Parser extends RubyObject {
          * @param name The constant name
          */
         private IRubyObject getConstant(String name) {
-            return parser.info.jsonModule.get().getConstant(name);
+            return parser.info.JSON.getConstant(name);
         }
 
         private RaiseException newException(String className, String message) {
@@ -884,10 +845,5 @@ public class Parser extends RubyObject {
             return Utils.newException(context, className, message);
         }
 
-        private RaiseException newException(String className,
-                String messageBegin, ByteList messageEnd) {
-            return newException(className,
-                    getRuntime().newString(messageBegin).cat(messageEnd));
-        }
     }
 }
